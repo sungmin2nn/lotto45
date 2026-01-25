@@ -1114,13 +1114,14 @@ function initStatRangeSelects(){
   const minRound=lottoData[lottoData.length-1].round;
   const maxRound=lottoData[0].round;
 
-  startSel.innerHTML='';
-  endSel.innerHTML='';
-
+  // 성능 최적화: 문자열 배열로 한번에 생성
+  const opts=[];
   for(let r=maxRound;r>=minRound;r--){
-    startSel.innerHTML+='<option value="'+r+'">'+r+'회</option>';
-    endSel.innerHTML+='<option value="'+r+'">'+r+'회</option>';
+    opts.push('<option value="'+r+'">'+r+'회</option>');
   }
+  const optsHtml=opts.join('');
+  startSel.innerHTML=optsHtml;
+  endSel.innerHTML=optsHtml;
 
   startSel.value=minRound;
   endSel.value=maxRound;
