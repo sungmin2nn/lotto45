@@ -340,11 +340,46 @@
   
   <!-- 통계 -->
   <div id="sec-stats" class="section">
+    <!-- 기간 설정 -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">📅 분석 기간</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <select id="statStartRound" class="input" style="width:100px;padding:8px" onchange="updateStatRange()"></select>
+        <span style="color:var(--text2)">~</span>
+        <select id="statEndRound" class="input" style="width:100px;padding:8px" onchange="updateStatRange()"></select>
+        <span style="font-size:12px;color:var(--text2)" id="statRangeInfo">(0회차)</span>
+      </div>
+      <div class="filter-bar">
+        <button class="filter-chip" onclick="setStatRange('recent10')">최근 10회</button>
+        <button class="filter-chip" onclick="setStatRange('recent50')">최근 50회</button>
+        <button class="filter-chip" onclick="setStatRange('month')">이번달</button>
+        <button class="filter-chip" onclick="setStatRange('3months')">3개월</button>
+        <button class="filter-chip" onclick="setStatRange('year')">올해</button>
+        <button class="filter-chip active" onclick="setStatRange('all')" id="statRangeAllBtn">전체</button>
+      </div>
+    </div>
+
+    <!-- 빈도 기반 추천 -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">🎯 빈도 기반 번호 추천 <span class="help-icon tooltip">?<span class="tooltip-text">선택한 기간 동안<br>가장 많이 출현한 번호 조합</span></span></div>
+      <div id="freqRecommend" style="text-align:center;padding:12px">
+        <div class="balls" id="freqBalls" style="margin-bottom:12px"></div>
+        <div style="font-size:11px;color:var(--text2)" id="freqInfo"></div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addFreqToPredict()" style="margin-top:8px">➕ 내 예측에 추가</button>
+    </div>
+
+    <!-- 매칭 옵션별 당첨 횟수 -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">📊 조건별 당첨 분석 <span class="help-icon tooltip">?<span class="tooltip-text">해당 조건을 만족한 회차 수<br>vs 실제 1~5등 당첨</span></span></div>
+      <div id="conditionStats" style="font-size:12px"></div>
+    </div>
+
     <div class="tabs">
       <button class="tab active" onclick="showStatTab('number',this)">번호별</button>
       <button class="tab" onclick="showStatTab('round',this)">회차별</button>
     </div>
-    
+
     <!-- 번호별 통계 -->
     <div id="stat-number" class="stat-content">
       <div class="card">
@@ -582,6 +617,8 @@ let lottoData=[], currentIndex=0, checkNumbers=new Set(), excludedNumbers=new Se
 let predictCount=3, numStats=[], predictOptions=new Set();
 let numSort={key:'num',asc:true}, numFilter='all', pairData={};
 let myPredictions=[]; // 내 예측 저장
+let statStartRound=1, statEndRound=9999; // 통계 기간 설정
+let freqRecommendNums=[]; // 빈도 기반 추천 번호
 
 // 초기화
 async function init(){
@@ -593,6 +630,7 @@ async function init(){
     document.getElementById('loading').style.display='none';
     document.getElementById('sec-home').classList.add('active');
     initAllGrids();
+    initStatRangeSelects();
     calculateAllStats();
     renderCurrentRound();
     renderAllStats();
@@ -902,10 +940,41 @@ function calculateAllStats(){
   window.statStd=std;
 }
 
-// 번호별 통계 렌더링
+// 번호별 통계 렌더링 (기간 필터 적용)
 function renderNumTable(){
-  let data=[...numStats];
-  
+  const filtered=getFilteredData();
+  if(filtered.length===0){
+    document.getElementById('numTableBody').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text2)">데이터 없음</td></tr>';
+    return;
+  }
+
+  // 기간별 통계 계산
+  const freq={},lastSeen={};
+  for(let i=1;i<=45;i++){freq[i]=0;lastSeen[i]=filtered.length}
+
+  filtered.forEach((item,idx)=>{
+    item.numbers.forEach(n=>{
+      freq[n]++;
+      if(idx<lastSeen[n])lastSeen[n]=idx;
+    });
+  });
+
+  const total=filtered.length;
+  const vals=Object.values(freq);
+  const mean=vals.reduce((a,b)=>a+b,0)/45;
+  const std=Math.sqrt(vals.reduce((s,v)=>s+Math.pow(v-mean,2),0)/45)||1;
+
+  let data=[];
+  for(let i=1;i<=45;i++){
+    data.push({
+      num:i,
+      count:freq[i],
+      percent:(freq[i]/(total*6)*100).toFixed(2),
+      last:lastSeen[i],
+      zscore:((freq[i]-mean)/std).toFixed(2)
+    });
+  }
+
   if(numFilter==='1-10')data=data.filter(d=>d.num<=10);
   else if(numFilter==='11-20')data=data.filter(d=>d.num>10&&d.num<=20);
   else if(numFilter==='21-30')data=data.filter(d=>d.num>20&&d.num<=30);
@@ -913,13 +982,13 @@ function renderNumTable(){
   else if(numFilter==='41-45')data=data.filter(d=>d.num>40);
   else if(numFilter==='hot')data=data.filter(d=>parseFloat(d.zscore)>1.5);
   else if(numFilter==='cold')data=data.filter(d=>parseFloat(d.zscore)<-1.5);
-  
+
   data.sort((a,b)=>{
     let va=a[numSort.key],vb=b[numSort.key];
     if(typeof va==='string'){va=parseFloat(va);vb=parseFloat(vb)}
     return numSort.asc?va-vb:vb-va;
   });
-  
+
   document.getElementById('numTableBody').innerHTML=data.map(d=>{
     const z=parseFloat(d.zscore);
     let status='',sc='var(--text2)';
@@ -946,14 +1015,26 @@ function showPairNumbers(){
   document.getElementById('pairResult').innerHTML='<div class="pair-grid">'+sorted.map(([n,c])=>'<div class="pair-item">'+createBall(parseInt(n),'xs')+'<div style="margin-top:4px;color:var(--text2)">'+c+'회</div></div>').join('')+'</div>';
 }
 
-// 회차별 통계 렌더링
+// 회차별 통계 렌더링 (기간 필터 적용)
 function renderRoundStats(){
-  const total=lottoData.length;
+  const filtered=getFilteredData();
+  const total=filtered.length;
+
+  if(total===0){
+    ['oddEvenBody','highLowBody','endNumBody','colorBody'].forEach(id=>{
+      document.getElementById(id).innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--text2)">데이터 없음</td></tr>';
+    });
+    ['sumStats','consecStats','carryStats','gapStats'].forEach(id=>{
+      document.getElementById(id).innerHTML='<div style="text-align:center;color:var(--text2)">데이터 없음</div>';
+    });
+    return;
+  }
+
   const oe=[0,0,0,0,0,0,0],hl=[0,0,0,0,0,0,0],endNums={},colors={'1-10':0,'11-20':0,'21-30':0,'31-40':0,'41-45':0};
   let sums=[],consec=0,acSum=0,carryCount=[0,0,0,0,0,0,0],gapSum=0,gapCnt=0;
   for(let i=0;i<=9;i++)endNums[i]=0;
-  
-  lottoData.forEach((item,idx)=>{
+
+  filtered.forEach((item,idx)=>{
     const nums=item.numbers;
     const odd=nums.filter(n=>n%2===1).length;
     const low=nums.filter(n=>n<=22).length;
@@ -981,8 +1062,8 @@ function renderRoundStats(){
     acSum+=diffs.size-5;
     
     // 이월 분석
-    if(idx<lottoData.length-1){
-      const prevNums=lottoData[idx+1].numbers;
+    if(idx<filtered.length-1){
+      const prevNums=filtered[idx+1].numbers;
       const carry=nums.filter(n=>prevNums.includes(n)).length;
       carryCount[carry]++;
     }
@@ -1022,7 +1103,212 @@ function getColorByRange(r){
   if(r==='1-10')return'#ffd700';if(r==='11-20')return'#4dabf7';if(r==='21-30')return'#ff6b6b';if(r==='31-40')return'#868e96';return'#51cf66';
 }
 
-function renderAllStats(){renderNumTable();renderRoundStats()}
+function renderAllStats(){renderNumTable();renderRoundStats();renderFreqRecommend();renderConditionStats()}
+
+// ========== 통계 기간 설정 ==========
+function initStatRangeSelects(){
+  const startSel=document.getElementById('statStartRound');
+  const endSel=document.getElementById('statEndRound');
+  if(!startSel||!endSel||!lottoData.length)return;
+
+  const minRound=lottoData[lottoData.length-1].round;
+  const maxRound=lottoData[0].round;
+
+  startSel.innerHTML='';
+  endSel.innerHTML='';
+
+  for(let r=maxRound;r>=minRound;r--){
+    startSel.innerHTML+='<option value="'+r+'">'+r+'회</option>';
+    endSel.innerHTML+='<option value="'+r+'">'+r+'회</option>';
+  }
+
+  startSel.value=minRound;
+  endSel.value=maxRound;
+  statStartRound=minRound;
+  statEndRound=maxRound;
+  updateStatRangeInfo();
+}
+
+function updateStatRange(){
+  statStartRound=parseInt(document.getElementById('statStartRound').value);
+  statEndRound=parseInt(document.getElementById('statEndRound').value);
+
+  // 시작이 끝보다 크면 교환
+  if(statStartRound>statEndRound){
+    [statStartRound,statEndRound]=[statEndRound,statStartRound];
+    document.getElementById('statStartRound').value=statStartRound;
+    document.getElementById('statEndRound').value=statEndRound;
+  }
+
+  updateStatRangeInfo();
+  clearStatRangeButtons();
+  renderAllStats();
+}
+
+function updateStatRangeInfo(){
+  const count=lottoData.filter(d=>d.round>=statStartRound&&d.round<=statEndRound).length;
+  document.getElementById('statRangeInfo').textContent='('+count+'회차)';
+}
+
+function clearStatRangeButtons(){
+  document.querySelectorAll('#sec-stats .card:first-child .filter-chip').forEach(b=>b.classList.remove('active'));
+}
+
+function setStatRange(preset){
+  clearStatRangeButtons();
+  event.target.classList.add('active');
+
+  const maxRound=lottoData[0].round;
+  const minRound=lottoData[lottoData.length-1].round;
+  const now=new Date();
+
+  switch(preset){
+    case'recent10':
+      statStartRound=Math.max(minRound,maxRound-9);
+      statEndRound=maxRound;
+      break;
+    case'recent50':
+      statStartRound=Math.max(minRound,maxRound-49);
+      statEndRound=maxRound;
+      break;
+    case'month':
+      // 이번달 (대략 4~5회차)
+      const monthStart=new Date(now.getFullYear(),now.getMonth(),1);
+      const monthData=lottoData.filter(d=>{
+        const dd=d.date;
+        if(!dd||dd.length!==8)return false;
+        const dt=new Date(dd.slice(0,4),parseInt(dd.slice(4,6))-1,dd.slice(6,8));
+        return dt>=monthStart;
+      });
+      if(monthData.length>0){
+        statStartRound=monthData[monthData.length-1].round;
+        statEndRound=monthData[0].round;
+      }
+      break;
+    case'3months':
+      const threeMonthsAgo=new Date(now.getFullYear(),now.getMonth()-3,1);
+      const threeMonthData=lottoData.filter(d=>{
+        const dd=d.date;
+        if(!dd||dd.length!==8)return false;
+        const dt=new Date(dd.slice(0,4),parseInt(dd.slice(4,6))-1,dd.slice(6,8));
+        return dt>=threeMonthsAgo;
+      });
+      if(threeMonthData.length>0){
+        statStartRound=threeMonthData[threeMonthData.length-1].round;
+        statEndRound=threeMonthData[0].round;
+      }
+      break;
+    case'year':
+      const yearStart=new Date(now.getFullYear(),0,1);
+      const yearData=lottoData.filter(d=>{
+        const dd=d.date;
+        if(!dd||dd.length!==8)return false;
+        const dt=new Date(dd.slice(0,4),parseInt(dd.slice(4,6))-1,dd.slice(6,8));
+        return dt>=yearStart;
+      });
+      if(yearData.length>0){
+        statStartRound=yearData[yearData.length-1].round;
+        statEndRound=yearData[0].round;
+      }
+      break;
+    case'all':
+    default:
+      statStartRound=minRound;
+      statEndRound=maxRound;
+      break;
+  }
+
+  document.getElementById('statStartRound').value=statStartRound;
+  document.getElementById('statEndRound').value=statEndRound;
+  updateStatRangeInfo();
+  renderAllStats();
+}
+
+// 기간 필터링된 데이터 가져오기
+function getFilteredData(){
+  return lottoData.filter(d=>d.round>=statStartRound&&d.round<=statEndRound);
+}
+
+// 빈도 기반 번호 추천
+function renderFreqRecommend(){
+  const filtered=getFilteredData();
+  if(filtered.length===0){
+    document.getElementById('freqBalls').innerHTML='<span style="color:var(--text2)">데이터 없음</span>';
+    document.getElementById('freqInfo').textContent='';
+    freqRecommendNums=[];
+    return;
+  }
+
+  // 번호별 빈도 계산
+  const freq={};
+  for(let i=1;i<=45;i++)freq[i]=0;
+  filtered.forEach(d=>d.numbers.forEach(n=>freq[n]++));
+
+  // 상위 10개 번호
+  const sorted=Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+  const top10=sorted.slice(0,10).map(([n,c])=>({num:parseInt(n),count:c}));
+
+  // 상위 6개로 추천
+  freqRecommendNums=top10.slice(0,6).map(x=>x.num).sort((a,b)=>a-b);
+
+  document.getElementById('freqBalls').innerHTML=createBalls(freqRecommendNums,null,'sm');
+  document.getElementById('freqInfo').innerHTML='<div style="margin-top:8px">상위 출현 번호: '+top10.map(x=>x.num+'('+x.count+'회)').join(', ')+'</div>';
+}
+
+function addFreqToPredict(){
+  if(freqRecommendNums.length!==6){
+    alert('추천 번호가 없습니다');
+    return;
+  }
+  const nextRound=(lottoData[0]?.round||0)+1;
+  document.getElementById('predictEditId').value='';
+  document.getElementById('predictRoundInput').value=nextRound;
+  document.getElementById('predictNumbersInput').value=freqRecommendNums.join(', ');
+  document.getElementById('predictMemoInput').value='빈도 기반 추천 ('+statStartRound+'~'+statEndRound+'회)';
+  document.getElementById('predictModalTitle').textContent='예측 추가';
+  document.getElementById('predictModal').classList.add('active');
+}
+
+// 조건별 당첨 분석
+function renderConditionStats(){
+  const filtered=getFilteredData();
+  if(filtered.length===0){
+    document.getElementById('conditionStats').innerHTML='<div style="text-align:center;color:var(--text2);padding:12px">데이터 없음</div>';
+    return;
+  }
+
+  const conditions=[
+    {name:'홀짝 균형 (3:3)',check:nums=>nums.filter(n=>n%2===1).length===3},
+    {name:'고저 균형 (3:3)',check:nums=>nums.filter(n=>n<=22).length===3},
+    {name:'총합 100-175',check:nums=>{const s=nums.reduce((a,b)=>a+b,0);return s>=100&&s<=175}},
+    {name:'연속번호 없음',check:nums=>{const sorted=[...nums].sort((a,b)=>a-b);for(let i=0;i<5;i++)if(sorted[i+1]-sorted[i]===1)return false;return true}},
+    {name:'색상 균형 (최대2개)',check:nums=>{const d=getColorDistribution(nums);return Math.max(...Object.values(d))<=2}},
+    {name:'끝수 4종류 이상',check:nums=>new Set(nums.map(n=>n%10)).size>=4}
+  ];
+
+  let html='<div style="display:grid;gap:8px">';
+
+  conditions.forEach(cond=>{
+    let matchCount=0;
+    filtered.forEach(d=>{
+      if(cond.check(d.numbers))matchCount++;
+    });
+    const pct=(matchCount/filtered.length*100).toFixed(1);
+    const barPct=Math.min(100,pct);
+
+    html+='<div style="background:var(--card2);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    html+='<span style="font-size:12px;color:var(--text)">'+cond.name+'</span>';
+    html+='<span style="font-size:12px;font-weight:600;color:var(--primary)">'+matchCount+'회 ('+pct+'%)</span>';
+    html+='</div>';
+    html+='<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">';
+    html+='<div style="width:'+barPct+'%;height:100%;background:var(--primary);border-radius:3px"></div>';
+    html+='</div></div>';
+  });
+
+  html+='</div>';
+  document.getElementById('conditionStats').innerHTML=html;
+}
 
 // 예측 옵션
 function toggleOption(el,opt){
