@@ -623,35 +623,21 @@ let freqRecommendNums=[]; // 빈도 기반 추천 번호
 // 초기화
 async function init(){
   try{
-    console.log('1. fetch 시작');
     const res=await fetch('lotto_data.json');
     if(!res.ok) throw new Error('데이터 없음');
-    console.log('2. fetch 완료');
     lottoData=await res.json();
-    console.log('3. JSON 파싱 완료, 데이터 수:', lottoData.length);
     lottoData.sort((a,b)=>b.round-a.round);
-    console.log('4. 정렬 완료');
     document.getElementById('loading').style.display='none';
     document.getElementById('sec-home').classList.add('active');
-    console.log('5. 로딩 숨김');
     initAllGrids();
-    console.log('6. initAllGrids 완료');
     initStatRangeSelects();
-    console.log('7. initStatRangeSelects 완료');
     calculateAllStats();
-    console.log('8. calculateAllStats 완료');
     renderCurrentRound();
-    console.log('9. renderCurrentRound 완료');
     renderAllStats();
-    console.log('10. renderAllStats 완료');
     updateDataStatus();
-    console.log('11. updateDataStatus 완료');
     initPairSelect();
-    console.log('12. initPairSelect 완료');
     loadMyPredictions();
-    console.log('13. 초기화 완료!');
   }catch(e){
-    console.error('초기화 에러:', e);
     document.getElementById('loading').innerHTML='<p style="color:var(--danger)">❌ '+e.message+'</p><button class="btn btn-primary" style="margin-top:16px" onclick="location.reload()">다시 시도</button>';
   }
 }
