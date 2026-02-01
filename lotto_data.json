@@ -49526,5 +49526,46 @@
     "totalWinners": 2696900,
     "totalSales": 120408668000,
     "gameNo": 5133
+  },
+  {
+    "round": 1209,
+    "date": "20260131",
+    "numbers": [
+      2,
+      17,
+      20,
+      35,
+      37,
+      39
+    ],
+    "bonus": 24,
+    "rank1": {
+      "winners": 22,
+      "prize": 1371910466,
+      "totalPrize": 30182030252
+    },
+    "rank2": {
+      "winners": 73,
+      "prize": 68908745,
+      "totalPrize": 5030338385
+    },
+    "rank3": {
+      "winners": 3141,
+      "prize": 1601509,
+      "totalPrize": 5030339769
+    },
+    "rank4": {
+      "winners": 163147,
+      "prize": 50000,
+      "totalPrize": 8157350000
+    },
+    "rank5": {
+      "winners": 2724028,
+      "prize": 5000,
+      "totalPrize": 13620140000
+    },
+    "totalWinners": 2890411,
+    "totalSales": 124040394000,
+    "gameNo": 5133
   }
 ]
