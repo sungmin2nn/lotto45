@@ -235,9 +235,12 @@
 
     <!-- 전략 기반 추천 번호 -->
     <div class="card" id="strategyCard" style="display:none">
-      <div class="card-title">🧬 전략 기반 추천 번호 <span class="help-icon tooltip">?<span class="tooltip-text">백테스팅 결과<br>4등+ 달성률 상위 전략</span></span></div>
+      <div class="card-title">🧬 전략 기반 추천 번호 <span class="help-icon tooltip">?<span class="tooltip-text">1회~현재까지 백테스팅 결과<br>4등+(4개 일치) 달성률 상위 5개 전략<br>각 전략별로 다음 회차 예측 번호 생성<br>➕버튼으로 개별 추가 가능</span></span></div>
       <div id="strategyPredictions"></div>
-      <div style="font-size:10px;color:var(--text2);margin-top:8px;text-align:right" id="strategyInfo"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+        <span style="font-size:10px;color:var(--text2)" id="strategyInfo"></span>
+        <button class="btn btn-primary btn-sm" onclick="addAllStrategyPredictions()">📥 전체 추가</button>
+      </div>
     </div>
   </div>
 
@@ -715,6 +718,46 @@ function addStrategyToPredict(numsStr,strategy){
   document.getElementById('predictMemoInput').value='전략: '+strategy;
   document.getElementById('predictModalTitle').textContent='예측 추가';
   document.getElementById('predictModal').classList.add('active');
+}
+
+// 전략 추천 번호 전체 추가
+function addAllStrategyPredictions(){
+  if(!backtestData||!backtestData.predictions||backtestData.predictions.length===0){
+    alert('추가할 전략 예측이 없습니다');
+    return;
+  }
+
+  const nextRound=backtestData.next_round||(lottoData[0]?.round||0)+1;
+  let added=0;
+
+  backtestData.predictions.forEach(p=>{
+    // 중복 체크
+    const isDup=myPredictions.some(mp=>
+      mp.targetRound===nextRound&&
+      JSON.stringify(mp.numbers.sort((a,b)=>a-b))===JSON.stringify(p.numbers.sort((a,b)=>a-b))
+    );
+
+    if(!isDup){
+      const newPred={
+        id:Date.now()+'_'+Math.random().toString(36).substr(2,9)+'_'+added,
+        targetRound:nextRound,
+        numbers:[...p.numbers].sort((a,b)=>a-b),
+        memo:'전략: '+p.strategy,
+        createdAt:new Date().toISOString(),
+        status:'pending'
+      };
+      myPredictions.push(newPred);
+      added++;
+    }
+  });
+
+  if(added>0){
+    saveMyPredictions();
+    renderMyPredictions();
+    alert(added+'개 전략 예측이 추가되었습니다');
+  }else{
+    alert('모든 전략 예측이 이미 추가되어 있습니다');
+  }
 }
 
 // 유틸리티
