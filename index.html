@@ -82,6 +82,17 @@
     .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(27,31,36,.5);z-index:200;align-items:center;justify-content:center}
     .modal-overlay.active{display:flex}
     .modal{background:var(--card);border-radius:12px;padding:24px;width:90%;max-width:320px;border:1px solid var(--border);box-shadow:0 8px 24px rgba(140,149,159,.2)}
+    .modal-lg{max-width:420px;max-height:80vh;overflow-y:auto}
+    .strategy-detail-section{margin-bottom:16px;padding:12px;background:var(--card2);border-radius:8px}
+    .strategy-detail-title{font-size:11px;color:var(--primary);font-weight:600;margin-bottom:6px}
+    .strategy-detail-content{font-size:12px;line-height:1.6;white-space:pre-wrap}
+    .win-history-item{background:var(--card);padding:8px;border-radius:6px;margin-top:8px;border:1px solid var(--border)}
+    .win-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
+    .win-badge.rank2{background:#fef3c7;color:#b45309}
+    .win-badge.rank3{background:#d1fae5;color:#065f46}
+    .win-badge.rank4{background:#e0e7ff;color:#3730a3}
+    .detail-btn{padding:4px 8px;font-size:10px;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer}
+    .detail-btn:hover{background:var(--primary2)}
     .modal h3{margin-bottom:16px;text-align:center;font-size:16px;color:var(--text)}
     .modal input{width:100%;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:18px;text-align:center;margin-bottom:12px}
     .modal input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(9,105,218,.15)}
@@ -562,6 +573,7 @@
               <th style="padding:8px 4px;text-align:center">3등</th>
               <th style="padding:8px 4px;text-align:center">4등</th>
               <th style="padding:8px 4px;text-align:center">ROI</th>
+              <th style="padding:8px 4px;text-align:center">상세</th>
             </tr>
           </thead>
           <tbody id="btStatsBody"></tbody>
@@ -662,6 +674,17 @@
   </div>
 </div>
 
+<!-- 전략 상세 모달 -->
+<div class="modal-overlay" id="strategyDetailModal">
+  <div class="modal modal-lg">
+    <h3 id="strategyDetailTitle" style="margin-bottom:12px"></h3>
+    <div id="strategyDetailContent"></div>
+    <div class="modal-buttons" style="margin-top:16px">
+      <button class="btn btn-outline" onclick="closeStrategyModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- 하단 네비게이션 -->
 <nav class="bottom-nav">
   <button class="nav-item active" onclick="showSection('home',this)"><span>🏠</span>홈</button>
@@ -713,9 +736,98 @@ async function loadBacktestResults(){
     backtestData=await res.json();
     renderStrategyPredictions();
     renderBacktestHistory();
+    loadStrategyDescriptions();
   }catch(e){
     console.log('백테스팅 결과 없음');
   }
+}
+
+// 전략 설명 데이터
+let strategyDescriptions={};
+
+// 전략 설명 로드
+async function loadStrategyDescriptions(){
+  try{
+    const res=await fetch('strategy_descriptions.json?t='+Date.now());
+    if(!res.ok)return;
+    strategyDescriptions=await res.json();
+  }catch(e){
+    console.log('전략 설명 로드 실패');
+  }
+}
+
+// 전략 상세 모달 열기
+function showStrategyDetail(name){
+  const modal=document.getElementById('strategyDetailModal');
+  const title=document.getElementById('strategyDetailTitle');
+  const content=document.getElementById('strategyDetailContent');
+
+  title.textContent=name;
+
+  const desc=strategyDescriptions[name];
+  if(desc){
+    let html='';
+    html+='<div class="strategy-detail-section">';
+    html+='<div class="strategy-detail-title">카테고리</div>';
+    html+='<div class="strategy-detail-content">'+(desc.category||'기타')+'</div>';
+    html+='</div>';
+
+    html+='<div class="strategy-detail-section">';
+    html+='<div class="strategy-detail-title">설명</div>';
+    html+='<div class="strategy-detail-content">'+(desc.description||'설명 없음')+'</div>';
+    html+='</div>';
+
+    html+='<div class="strategy-detail-section">';
+    html+='<div class="strategy-detail-title">공식/규칙</div>';
+    html+='<div class="strategy-detail-content">'+(desc.formula||'규칙 정보 없음')+'</div>';
+    html+='</div>';
+
+    html+='<div class="strategy-detail-section">';
+    html+='<div class="strategy-detail-title">예시</div>';
+    html+='<div class="strategy-detail-content">'+(desc.example||'예시 없음')+'</div>';
+    html+='</div>';
+
+    if(desc.win_history&&desc.win_history.length>0){
+      html+='<div class="strategy-detail-section">';
+      html+='<div class="strategy-detail-title">당첨 이력</div>';
+      desc.win_history.forEach(w=>{
+        const rankClass=w.rank===2?'rank2':w.rank===3?'rank3':'rank4';
+        html+='<div class="win-history-item">';
+        html+='<span class="win-badge '+rankClass+'">'+w.round+'회 '+w.rank+'등</span>';
+        if(w.numbers&&w.numbers.length>0)html+='<div style="margin-top:6px;font-size:11px">예측: '+w.numbers.join(', ')+'</div>';
+        if(w.actual&&w.actual.length>0)html+='<div style="font-size:11px;color:var(--text2)">실제: '+w.actual.join(', ')+'</div>';
+        html+='</div>';
+      });
+      html+='</div>';
+    }
+    content.innerHTML=html;
+  }else{
+    // 설명이 없는 경우 백테스트 결과에서 정보 추출
+    const stats=backtestData&&backtestData.statistics?backtestData.statistics[name]:null;
+    let html='<div class="strategy-detail-section">';
+    html+='<div class="strategy-detail-title">상세 정보</div>';
+    html+='<div class="strategy-detail-content">이 전략의 상세 설명이 아직 등록되지 않았습니다.</div>';
+    html+='</div>';
+    if(stats){
+      html+='<div class="strategy-detail-section">';
+      html+='<div class="strategy-detail-title">백테스트 결과</div>';
+      html+='<div class="strategy-detail-content">';
+      html+='ROI: '+(stats.roi||0).toFixed(1)+'%\\n';
+      html+='2등: '+(stats['2등']||0)+'회\\n';
+      html+='3등: '+(stats['3등']||0)+'회\\n';
+      html+='4등: '+(stats['4등']||0)+'회\\n';
+      html+='5등: '+(stats['5등']||0)+'회';
+      html+='</div></div>';
+    }
+    content.innerHTML=html;
+  }
+
+  modal.classList.add('active');
+}
+
+// 전략 상세 모달 닫기
+function closeStrategyModal(){
+  document.getElementById('strategyDetailModal').classList.remove('active');
 }
 
 // 전략 기반 추천 번호 렌더링
@@ -851,6 +963,7 @@ function renderBacktestHistory(){
     tbody+='<td style="padding:8px 4px;text-align:center;color:var(--success)">'+(s['3등']||0)+'</td>';
     tbody+='<td style="padding:8px 4px;text-align:center">'+(s['4등']||0)+'</td>';
     tbody+='<td style="padding:8px 4px;text-align:center;color:'+roiColor+';font-weight:700">'+roi.toFixed(1)+'%'+roiIcon+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center"><button class="detail-btn" onclick="showStrategyDetail(\''+name.replace(/'/g,"\\'")+'\')">상세</button></td>';
     tbody+='</tr>';
   });
   document.getElementById('btStatsBody').innerHTML=tbody;

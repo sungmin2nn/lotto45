@@ -453,7 +453,7 @@ def main():
                     'strategy': name,
                     'numbers': numbers,
                     'roi': round(stats['roi'], 2),
-                    'description': f"ROI {stats['roi']:.1f}% (2등:{stats['wins'][2]}, 3등:{stats['wins'][3]})"
+                    'description': f"ROI {stats['roi']:.1f}% (2등:{stats['wins'].get(2,0)}, 3등:{stats['wins'].get(3,0)}, 4등:{stats['wins'].get(4,0)})"
                 })
                 print(f"  {name}: {numbers}")
             except Exception as e:
