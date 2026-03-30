@@ -229,6 +229,32 @@ DASHBOARD_STRATEGIES = {
 }
 
 #############################################
+# 사용자 정의 전략 로드
+#############################################
+
+def load_user_strategies():
+    """user_strategies.py에서 사용자 전략 로드"""
+    user_strategies = {}
+    user_file = os.path.join(BASE_DIR, 'user_strategies.py')
+
+    if not os.path.exists(user_file):
+        return user_strategies
+
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("user_strategies", user_file)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        if hasattr(module, 'USER_STRATEGIES'):
+            user_strategies = module.USER_STRATEGIES
+            print(f"    - 사용자 전략: {len(user_strategies)}개")
+    except Exception as e:
+        print(f"  경고: 사용자 전략 로드 실패 - {e}")
+
+    return user_strategies
+
+#############################################
 # 외부 전략 파일 로드
 #############################################
 
@@ -393,6 +419,8 @@ def main():
     all_strategies = dict(DASHBOARD_STRATEGIES)
     external = load_external_strategies()
     all_strategies.update(external)
+    user_strats = load_user_strategies()
+    all_strategies.update(user_strats)
     print(f"  총 {len(all_strategies)}개 전략 로드됨")
     print(f"    - 대시보드: {len(DASHBOARD_STRATEGIES)}개")
     print(f"    - 외부 전략: {len(external)}개")
