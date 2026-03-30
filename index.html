@@ -558,10 +558,10 @@
             <tr style="border-bottom:1px solid var(--border)">
               <th style="padding:8px 4px;text-align:left">순위</th>
               <th style="padding:8px 4px;text-align:left">전략</th>
+              <th style="padding:8px 4px;text-align:center">2등</th>
               <th style="padding:8px 4px;text-align:center">3등</th>
               <th style="padding:8px 4px;text-align:center">4등</th>
-              <th style="padding:8px 4px;text-align:center">5등</th>
-              <th style="padding:8px 4px;text-align:center">4등+율</th>
+              <th style="padding:8px 4px;text-align:center">ROI</th>
             </tr>
           </thead>
           <tbody id="btStatsBody"></tbody>
@@ -708,7 +708,7 @@ async function init(){
 // 백테스팅 결과 로드
 async function loadBacktestResults(){
   try{
-    const res=await fetch('backtest_results.json');
+    const res=await fetch('backtest_results.json?t='+Date.now());
     if(!res.ok)return;
     backtestData=await res.json();
     renderStrategyPredictions();
@@ -813,32 +813,44 @@ function renderBacktestHistory(){
   const totalRounds=Object.keys(backtestData.results||{}).length;
   const totalStrategies=Object.keys(stats).length;
 
-  let total3=0,total4=0,total5=0;
+  let total2=0,total3=0,total4=0,total5=0;
   Object.values(stats).forEach(s=>{
+    total2+=s['2등']||0;
     total3+=s['3등']||0;
     total4+=s['4등']||0;
     total5+=s['5등']||0;
   });
 
   document.getElementById('btSummary').innerHTML=
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">'+
-    '<div><div style="font-size:18px;font-weight:700;color:var(--primary)">'+totalRounds+'</div><div>분석 회차</div></div>'+
-    '<div><div style="font-size:18px;font-weight:700;color:var(--success)">'+(total3+total4)+'</div><div>4등 이상</div></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">'+
+    '<div><div style="font-size:18px;font-weight:700;color:var(--primary)">'+totalStrategies+'</div><div>전략 수</div></div>'+
+    '<div><div style="font-size:18px;font-weight:700;color:#b45309">'+total2+'</div><div>2등</div></div>'+
+    '<div><div style="font-size:18px;font-weight:700;color:var(--success)">'+(total3+total4)+'</div><div>3-4등</div></div>'+
     '<div><div style="font-size:18px;font-weight:700;color:var(--warning)">'+total5+'</div><div>5등</div></div>'+
     '</div>';
 
-  // 전략별 통계 테이블
-  const sorted=Object.entries(stats).sort((a,b)=>b[1]['4등이상율']-a[1]['4등이상율']);
+  // 전략별 통계 테이블 (ROI 기준 정렬)
+  const PRIZE={1:2000000000,2:50000000,3:1500000,4:50000,5:5000};
+  const statsWithROI=Object.entries(stats).map(([name,s])=>{
+    const total=s.total||1217;
+    const cost=total*1000;
+    const prize=(s['1등']||0)*PRIZE[1]+(s['2등']||0)*PRIZE[2]+(s['3등']||0)*PRIZE[3]+(s['4등']||0)*PRIZE[4]+(s['5등']||0)*PRIZE[5];
+    const roi=s.roi!==undefined?s.roi:((prize-cost)/cost*100);
+    return [name,{...s,roi}];
+  });
+  const sorted=statsWithROI.sort((a,b)=>b[1].roi-a[1].roi);
   let tbody='';
   sorted.forEach(([name,s],i)=>{
-    const rate4=s['4등이상율']||0;
+    const roi=s.roi||0;
+    const roiColor=roi>=50?'#b45309':roi>0?'var(--success)':'var(--text2)';
+    const roiIcon=roi>=50?' ★★★':roi>0?' ★':'';
     tbody+='<tr style="border-bottom:1px solid var(--border)">';
     tbody+='<td style="padding:8px 4px;color:var(--warning);font-weight:700">'+(i+1)+'</td>';
-    tbody+='<td style="padding:8px 4px">'+name+'</td>';
-    tbody+='<td style="padding:8px 4px;text-align:center">'+(s['3등']||0)+'</td>';
-    tbody+='<td style="padding:8px 4px;text-align:center;color:var(--success);font-weight:700">'+(s['4등']||0)+'</td>';
-    tbody+='<td style="padding:8px 4px;text-align:center">'+(s['5등']||0)+'</td>';
-    tbody+='<td style="padding:8px 4px;text-align:center;color:var(--primary)">'+rate4+'%</td>';
+    tbody+='<td style="padding:8px 4px;font-weight:'+(roi>=50?'700':'400')+'">'+name+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center;color:#b45309;font-weight:700">'+(s['2등']||0)+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center;color:var(--success)">'+(s['3등']||0)+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center">'+(s['4등']||0)+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center;color:'+roiColor+';font-weight:700">'+roi.toFixed(1)+'%'+roiIcon+'</td>';
     tbody+='</tr>';
   });
   document.getElementById('btStatsBody').innerHTML=tbody;
