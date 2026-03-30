@@ -547,6 +547,48 @@
     </div>
   </div>
 
+  <!-- 백테스팅 기록 -->
+  <div id="sec-backtest" class="section">
+    <div class="card">
+      <div class="card-title">📈 전략별 성과 요약 <span class="help-icon tooltip">?<span class="tooltip-text">1회부터 현재까지<br>각 전략의 백테스팅 결과</span></span></div>
+      <div id="btSummary" style="font-size:12px;color:var(--text2);margin-bottom:12px"></div>
+      <div style="overflow-x:auto">
+        <table id="btStatsTable" style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="padding:8px 4px;text-align:left">순위</th>
+              <th style="padding:8px 4px;text-align:left">전략</th>
+              <th style="padding:8px 4px;text-align:center">3등</th>
+              <th style="padding:8px 4px;text-align:center">4등</th>
+              <th style="padding:8px 4px;text-align:center">5등</th>
+              <th style="padding:8px 4px;text-align:center">4등+율</th>
+            </tr>
+          </thead>
+          <tbody id="btStatsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔍 회차별 기록 조회</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="number" id="btRoundInput" placeholder="회차 입력" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--card2);color:var(--text)">
+        <button class="btn btn-primary" onclick="searchBtRound()">조회</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-outline btn-sm" onclick="showBtRound('latest')">최신</button>
+        <button class="btn btn-outline btn-sm" onclick="showBtRound('best')">최고성과</button>
+        <button class="btn btn-outline btn-sm" onclick="showBtRound('4plus')">4등+</button>
+      </div>
+      <div id="btRoundResult"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 당첨 기록</div>
+      <div id="btWinHistory" style="max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+
   <!-- 설정 -->
   <div id="sec-settings" class="section">
     <div class="card">
@@ -625,6 +667,7 @@
   <button class="nav-item active" onclick="showSection('home',this)"><span>🏠</span>홈</button>
   <button class="nav-item" onclick="showSection('predict',this)"><span>🔮</span>예측</button>
   <button class="nav-item" onclick="showSection('mypredict',this)"><span>📝</span>내 예측</button>
+  <button class="nav-item" onclick="showSection('backtest',this)"><span>🧬</span>기록</button>
   <button class="nav-item" onclick="showSection('stats',this)"><span>📊</span>통계</button>
   <button class="nav-item" onclick="showSection('settings',this)"><span>⚙️</span>설정</button>
 </nav>
@@ -669,6 +712,7 @@ async function loadBacktestResults(){
     if(!res.ok)return;
     backtestData=await res.json();
     renderStrategyPredictions();
+    renderBacktestHistory();
   }catch(e){
     console.log('백테스팅 결과 없음');
   }
@@ -758,6 +802,173 @@ function addAllStrategyPredictions(){
   }else{
     alert('모든 전략 예측이 이미 추가되어 있습니다');
   }
+}
+
+// 백테스팅 기록 렌더링
+function renderBacktestHistory(){
+  if(!backtestData||!backtestData.statistics)return;
+
+  // 요약 정보
+  const stats=backtestData.statistics;
+  const totalRounds=Object.keys(backtestData.results||{}).length;
+  const totalStrategies=Object.keys(stats).length;
+
+  let total3=0,total4=0,total5=0;
+  Object.values(stats).forEach(s=>{
+    total3+=s['3등']||0;
+    total4+=s['4등']||0;
+    total5+=s['5등']||0;
+  });
+
+  document.getElementById('btSummary').innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">'+
+    '<div><div style="font-size:18px;font-weight:700;color:var(--primary)">'+totalRounds+'</div><div>분석 회차</div></div>'+
+    '<div><div style="font-size:18px;font-weight:700;color:var(--success)">'+(total3+total4)+'</div><div>4등 이상</div></div>'+
+    '<div><div style="font-size:18px;font-weight:700;color:var(--warning)">'+total5+'</div><div>5등</div></div>'+
+    '</div>';
+
+  // 전략별 통계 테이블
+  const sorted=Object.entries(stats).sort((a,b)=>b[1]['4등이상율']-a[1]['4등이상율']);
+  let tbody='';
+  sorted.forEach(([name,s],i)=>{
+    const rate4=s['4등이상율']||0;
+    tbody+='<tr style="border-bottom:1px solid var(--border)">';
+    tbody+='<td style="padding:8px 4px;color:var(--warning);font-weight:700">'+(i+1)+'</td>';
+    tbody+='<td style="padding:8px 4px">'+name+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center">'+(s['3등']||0)+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center;color:var(--success);font-weight:700">'+(s['4등']||0)+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center">'+(s['5등']||0)+'</td>';
+    tbody+='<td style="padding:8px 4px;text-align:center;color:var(--primary)">'+rate4+'%</td>';
+    tbody+='</tr>';
+  });
+  document.getElementById('btStatsBody').innerHTML=tbody;
+
+  // 당첨 기록 (4등 이상)
+  renderWinHistory();
+}
+
+// 당첨 기록 렌더링
+function renderWinHistory(){
+  if(!backtestData||!backtestData.results)return;
+
+  const wins=[];
+  Object.entries(backtestData.results).forEach(([round,strategies])=>{
+    Object.entries(strategies).forEach(([name,info])=>{
+      if(info.match>=4){
+        wins.push({round:parseInt(round),strategy:name,...info});
+      }
+    });
+  });
+
+  wins.sort((a,b)=>b.match-a.match||b.round-a.round);
+
+  if(wins.length===0){
+    document.getElementById('btWinHistory').innerHTML='<div style="text-align:center;color:var(--text2);padding:20px">4등 이상 당첨 기록이 없습니다</div>';
+    return;
+  }
+
+  let html='';
+  wins.forEach(w=>{
+    const rankColor=w.match>=5?'var(--warning)':w.match>=4?'var(--success)':'var(--text2)';
+    html+='<div style="background:var(--card2);border-radius:8px;padding:10px;margin-bottom:8px">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    html+='<span style="font-weight:700">'+w.round+'회</span>';
+    html+='<span style="color:'+rankColor+';font-weight:700">'+w.rank+' ('+w.match+'개)</span>';
+    html+='</div>';
+    html+='<div style="font-size:11px;color:var(--primary);margin-bottom:4px">'+w.strategy+'</div>';
+    html+='<div style="font-size:10px;color:var(--text2)">예측: '+w.numbers.join(', ')+'</div>';
+    html+='<div style="font-size:10px;color:var(--text2)">실제: '+w.actual.join(', ')+'</div>';
+    html+='</div>';
+  });
+
+  document.getElementById('btWinHistory').innerHTML=html;
+}
+
+// 회차별 기록 조회
+function searchBtRound(){
+  const round=parseInt(document.getElementById('btRoundInput').value);
+  if(!round||isNaN(round)){
+    alert('회차를 입력하세요');
+    return;
+  }
+  showBtRoundDetail(round);
+}
+
+function showBtRound(type){
+  if(!backtestData||!backtestData.results)return;
+
+  const rounds=Object.keys(backtestData.results).map(r=>parseInt(r));
+
+  if(type==='latest'){
+    showBtRoundDetail(Math.max(...rounds));
+  }else if(type==='best'){
+    // 가장 많이 일치한 회차 찾기
+    let best={round:0,match:0};
+    Object.entries(backtestData.results).forEach(([round,strategies])=>{
+      Object.values(strategies).forEach(info=>{
+        if(info.match>best.match){
+          best={round:parseInt(round),match:info.match};
+        }
+      });
+    });
+    if(best.round)showBtRoundDetail(best.round);
+  }else if(type==='4plus'){
+    // 4등 이상 회차 목록
+    const wins=[];
+    Object.entries(backtestData.results).forEach(([round,strategies])=>{
+      Object.entries(strategies).forEach(([name,info])=>{
+        if(info.match>=4){
+          wins.push({round:parseInt(round),strategy:name,match:info.match,rank:info.rank});
+        }
+      });
+    });
+    wins.sort((a,b)=>b.round-a.round);
+
+    let html='<div style="font-size:12px;font-weight:700;margin-bottom:8px">4등 이상 회차 목록 ('+wins.length+'건)</div>';
+    wins.forEach(w=>{
+      html+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showBtRoundDetail('+w.round+')">';
+      html+='<span>'+w.round+'회 - '+w.strategy+'</span>';
+      html+='<span style="color:var(--success)">'+w.rank+'</span>';
+      html+='</div>';
+    });
+    document.getElementById('btRoundResult').innerHTML=html;
+  }
+}
+
+function showBtRoundDetail(round){
+  if(!backtestData||!backtestData.results||!backtestData.results[round]){
+    document.getElementById('btRoundResult').innerHTML='<div style="color:var(--danger);padding:12px">해당 회차 데이터가 없습니다</div>';
+    return;
+  }
+
+  const strategies=backtestData.results[round];
+  const sample=Object.values(strategies)[0];
+
+  let html='<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:12px">';
+  html+='<div style="font-size:14px;font-weight:700;margin-bottom:8px">'+round+'회 당첨번호</div>';
+  html+='<div class="balls">'+createBalls(sample.actual,sample.bonus,'sm')+'</div>';
+  html+='</div>';
+
+  html+='<div style="font-size:12px;font-weight:700;margin-bottom:8px">전략별 예측 결과</div>';
+
+  // 일치 개수로 정렬
+  const sorted=Object.entries(strategies).sort((a,b)=>b[1].match-a[1].match);
+
+  sorted.forEach(([name,info])=>{
+    const matchColor=info.match>=4?'var(--success)':info.match>=3?'var(--warning)':'var(--text2)';
+    const matched=sample.actual.filter(n=>info.numbers.includes(n));
+
+    html+='<div style="background:var(--card2);border-radius:8px;padding:10px;margin-bottom:6px">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    html+='<span style="font-size:11px;font-weight:600">'+name+'</span>';
+    html+='<span style="font-size:11px;color:'+matchColor+';font-weight:700">'+info.match+'개 일치'+(info.rank!=='낙첨'?' ('+info.rank+')':'')+'</span>';
+    html+='</div>';
+    html+='<div class="balls">'+createBalls(info.numbers,null,'sm',matched)+'</div>';
+    html+='</div>';
+  });
+
+  document.getElementById('btRoundResult').innerHTML=html;
+  document.getElementById('btRoundInput').value=round;
 }
 
 // 유틸리티
