@@ -449,10 +449,15 @@ def main():
         if func:
             try:
                 numbers = func(lotto_data, next_round)
+                # 4등 이상 달성률 계산
+                total_rounds = stats.get('total', len(lotto_data))
+                wins_4plus = stats['wins'].get(2,0) + stats['wins'].get(3,0) + stats['wins'].get(4,0)
+                rate_4plus = round((wins_4plus / total_rounds) * 100, 1) if total_rounds > 0 else 0
                 predictions.append({
                     'strategy': name,
                     'numbers': numbers,
                     'roi': round(stats['roi'], 2),
+                    'rate_4plus': rate_4plus,
                     'description': f"ROI {stats['roi']:.1f}% (2등:{stats['wins'].get(2,0)}, 3등:{stats['wins'].get(3,0)}, 4등:{stats['wins'].get(4,0)})"
                 })
                 print(f"  {name}: {numbers}")
