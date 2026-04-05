@@ -25,11 +25,14 @@ jobs:
       
       - name: 로또 데이터 수집
         run: python collect_lotto.py
-      
+
+      - name: 전략 추천번호 갱신
+        run: python weekly_runner.py
+
       - name: 변경사항 커밋 & 푸시
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add lotto_data.json
+          git add lotto_data.json backtest_results.json
           git diff --staged --quiet || git commit -m "🎱 로또 데이터 업데이트 $(date +'%Y-%m-%d')"
           git push

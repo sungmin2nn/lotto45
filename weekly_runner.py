@@ -14,8 +14,8 @@ import sys
 from datetime import datetime
 from collections import Counter
 
-# 경로 설정
-BASE_DIR = '/Users/kslee/Downloads/kslee_ZIP/zip1/lotto45'
+# 경로 설정 (스크립트 위치 기준)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STRATEGIES_DIR = os.path.join(BASE_DIR, 'strategies_to_test')
 
 # 데이터 로드
@@ -413,6 +413,17 @@ def main():
     latest_round = max(item['round'] for item in lotto_data)
     next_round = latest_round + 1
     print(f"  다음 회차: {next_round}회")
+
+    # 이미 최신 상태인지 확인 (중복 갱신 방지)
+    backtest_file = os.path.join(BASE_DIR, 'backtest_results.json')
+    if os.path.exists(backtest_file):
+        with open(backtest_file, 'r') as f:
+            existing_data = json.load(f)
+            existing_next = existing_data.get('next_round', 0)
+            if existing_next == next_round:
+                print(f"\n  ℹ️ 이미 {next_round}회차 예측이 생성되어 있습니다. 스킵.")
+                print("=" * 60)
+                return []
 
     # 모든 전략 수집
     print("\n[1] 전략 로드 중...")
