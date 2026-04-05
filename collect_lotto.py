@@ -4,6 +4,8 @@
 
 import requests
 import json
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 JSON_FILE = "lotto_data.json"
 
@@ -19,7 +21,7 @@ def fetch_all_data():
     url = "https://www.dhlottery.co.kr/lt645/selectPstLt645Info.do?srchLtEpsd=all"
     
     print("📡 API 호출 중...")
-    res = requests.get(url, headers=HEADERS, timeout=60)
+    res = requests.get(url, headers=HEADERS, timeout=60, verify=False)
     
     if res.status_code != 200:
         print(f"❌ HTTP 에러: {res.status_code}")
