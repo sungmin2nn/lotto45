@@ -1262,12 +1262,12 @@ function renderCurrentRound(){
   
   document.getElementById('prevBtn').disabled=currentIndex>=lottoData.length-1;
 
-  // 최신 회차일 때 nextBtn을 수동 수집 버튼(⭕)으로 변경
+  // 최신 회차일 때 nextBtn을 새로고침 버튼(🔄)으로 변경
   const nextBtn=document.getElementById('nextBtn');
   if(currentIndex<=0){
-    nextBtn.textContent='⭕';
+    nextBtn.textContent='🔄';
     nextBtn.disabled=false;
-    nextBtn.title='새 회차 수집';
+    nextBtn.title='최신 데이터 새로고침';
   }else{
     nextBtn.textContent='▶';
     nextBtn.disabled=false;
@@ -1906,11 +1906,36 @@ async function collectNewRounds(onProgress){
   return{newData,currentLatest};
 }
 
-// 메인 화면에서 수동 수집 (회차 네비게이션 버튼용) → GitHub Actions 페이지로 이동
-function manualCollectFromMain(){
-  if(confirm('GitHub Actions 페이지로 이동합니다.\\n"Run workflow" 버튼을 클릭하여 수집을 실행하세요.')){
-    window.open('https://github.com/sungmin2nn/lotto45/actions/workflows/collect.yml','_blank');
+// 메인 화면에서 강제 새로고침 (캐시 무효화)
+async function manualCollectFromMain(){
+  const nextBtn=document.getElementById('nextBtn');
+  const oldRound=lottoData.length?lottoData[0].round:0;
+  nextBtn.disabled=true;
+  nextBtn.textContent='⏳';
+
+  try{
+    const res=await fetch('lotto_data.json?t='+Date.now(),{cache:'no-store'});
+    if(!res.ok) throw new Error('데이터 로드 실패');
+    const newData=await res.json();
+    newData.sort((a,b)=>b.round-a.round);
+    const newRound=newData[0].round;
+
+    if(newRound>oldRound){
+      lottoData=newData;
+      currentIndex=0;
+      renderCurrentRound();
+      renderAllStats();
+      updateDataStatus();
+      alert('✅ 새 데이터 로드 완료!\\n'+oldRound+'회 → '+newRound+'회');
+    }else{
+      alert('ℹ️ 최신 데이터입니다. ('+newRound+'회)\\n\\n새 데이터가 없다면 설정에서\\nGitHub Actions 실행 후 다시 시도하세요.');
+    }
+  }catch(e){
+    alert('❌ 새로고침 실패: '+e.message);
   }
+
+  nextBtn.disabled=false;
+  nextBtn.textContent='🔄';
 }
 
 // 수동 수집 (설정 탭용) → GitHub Actions 페이지로 이동
