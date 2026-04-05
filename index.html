@@ -609,7 +609,7 @@
     </div>
     <div class="card">
       <div class="card-title">🔄 관리</div>
-      <button class="btn btn-primary" onclick="manualCollect()" style="margin-bottom:8px" id="collectBtn">📡 수동 수집</button>
+      <button class="btn btn-primary" onclick="manualCollect()" style="margin-bottom:8px" id="collectBtn">🔄 GitHub에서 수집 실행</button>
       <button class="btn btn-outline" onclick="location.reload()" style="margin-bottom:8px">🔄 새로고침</button>
       <button class="btn btn-outline" onclick="exportData()">📤 데이터 내보내기</button>
       <div id="collectStatus" style="margin-top:8px;font-size:12px;color:var(--text2)"></div>
@@ -1906,53 +1906,19 @@ async function collectNewRounds(onProgress){
   return{newData,currentLatest};
 }
 
-// 메인 화면에서 수동 수집 (회차 네비게이션 버튼용)
-async function manualCollectFromMain(){
-  const nextBtn=document.getElementById('nextBtn');
-  nextBtn.disabled=true;
-  nextBtn.textContent='⏳';
-
-  try{
-    const{newData,currentLatest}=await collectNewRounds();
-    if(newData.length>0){
-      refreshAfterCollect(newData);
-      alert('✅ '+newData.length+'개 회차 수집 완료!\\n'+newData.map(d=>d.round+'회').join(', '));
-    }else{
-      alert('ℹ️ 새로운 데이터가 없습니다.\\n(최신: '+currentLatest+'회)');
-    }
-  }catch(e){
-    alert('❌ 수집 실패: '+e.message);
+// 메인 화면에서 수동 수집 (회차 네비게이션 버튼용) → GitHub Actions 페이지로 이동
+function manualCollectFromMain(){
+  if(confirm('GitHub Actions 페이지로 이동합니다.\\n"Run workflow" 버튼을 클릭하여 수집을 실행하세요.')){
+    window.open('https://github.com/sungmin2nn/lotto45/actions/workflows/collect.yml','_blank');
   }
-
-  nextBtn.disabled=false;
-  nextBtn.textContent='⭕';
 }
 
-// 수동 수집 (설정 탭용)
-async function manualCollect(){
-  const btn=document.getElementById('collectBtn');
+// 수동 수집 (설정 탭용) → GitHub Actions 페이지로 이동
+function manualCollect(){
   const status=document.getElementById('collectStatus');
-  btn.disabled=true;
-  btn.textContent='⏳ 수집 중...';
-  status.innerHTML='<span style="color:var(--primary)">동행복권 API 호출 중...</span>';
-
-  try{
-    const{newData,currentLatest}=await collectNewRounds(round=>{
-      status.innerHTML='<span style="color:var(--primary)">'+round+'회차 확인 중...</span>';
-    });
-
-    if(newData.length>0){
-      refreshAfterCollect(newData);
-      status.innerHTML='<span style="color:var(--success)">✅ '+newData.length+'개 회차 수집 완료! ('+newData.map(d=>d.round+'회').join(', ')+')</span>';
-    }else{
-      status.innerHTML='<span style="color:var(--text2)">ℹ️ 새로운 데이터가 없습니다. (최신: '+currentLatest+'회)</span>';
-    }
-  }catch(e){
-    status.innerHTML='<span style="color:var(--danger)">❌ 수집 실패: '+e.message+'</span>';
-  }
-
-  btn.disabled=false;
-  btn.textContent='📡 수동 수집';
+  status.innerHTML='<span style="color:var(--primary)">GitHub Actions 페이지로 이동 중...</span>';
+  window.open('https://github.com/sungmin2nn/lotto45/actions/workflows/collect.yml','_blank');
+  status.innerHTML='<span style="color:var(--text2)">ℹ️ GitHub에서 "Run workflow" 버튼을 클릭하세요. 완료 후 새로고침하면 반영됩니다.</span>';
 }
 
 // ========== 내 예측 관리 ==========
