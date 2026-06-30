@@ -253,6 +253,14 @@
         <button class="btn btn-primary btn-sm" onclick="addAllStrategyPredictions()">📥 전체 추가</button>
       </div>
     </div>
+
+    <!-- 🧬 evolab 진화 추천 -->
+    <div class="card" id="evolabCard" style="display:none">
+      <div class="card-title">🧬 evolab 진화 추천 <span class="help-icon tooltip">?<span class="tooltip-text">자유탐색→성과측정→공유→진화 루프<br>전략마다 산술식+사유 표시<br>회차별 누적 적중 추적<br>적합도=ROI+비인기도+건전성</span></span></div>
+      <div id="evolabPredictions"></div>
+      <div id="evolabLedger" style="margin-top:12px"></div>
+      <div id="evolabNote" style="font-size:10px;color:var(--text2);margin-top:10px;padding:8px;background:var(--card2);border-radius:8px"></div>
+    </div>
   </div>
 
   <!-- 예측 -->
@@ -723,6 +731,7 @@ async function init(){
     initPairSelect();
     loadMyPredictions();
     loadBacktestResults();
+    loadEvolabData();
   }catch(e){
     document.getElementById('loading').innerHTML='<p style="color:var(--danger)">❌ '+e.message+'</p><button class="btn btn-primary" style="margin-top:16px" onclick="location.reload()">다시 시도</button>';
   }
@@ -740,6 +749,73 @@ async function loadBacktestResults(){
   }catch(e){
     console.log('백테스팅 결과 없음');
   }
+}
+
+// 🧬 evolab 진화 데이터 로드/렌더
+let evolabData=null;
+async function loadEvolabData(){
+  try{
+    const res=await fetch('evolab/dashboard_data.json?t='+Date.now());
+    if(!res.ok)return;
+    evolabData=await res.json();
+    renderEvolab();
+  }catch(e){ console.log('evolab 데이터 없음'); }
+}
+
+function renderEvolab(){
+  if(!evolabData||!evolabData.predictions||evolabData.predictions.length===0)return;
+  document.getElementById('evolabCard').style.display='block';
+
+  const metaByName={};
+  (evolabData.strategies||[]).forEach(s=>metaByName[s.name]=s);
+
+  let html='';
+  evolabData.predictions.forEach((p,i)=>{
+    const m=metaByName[p.strategy]||{}, mt=m.metrics||{};
+    const numsStr=p.numbers.join(',');
+    const f=v=>(v==null?0:v);
+    html+='<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:8px">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    html+='<span style="font-size:12px;font-weight:700;color:var(--primary)">'+(i+1)+'. '+p.strategy+'</span>';
+    html+='<span style="font-size:10px;color:var(--success)">적합도 '+f(mt.fitness).toFixed(3)+'</span>';
+    html+='</div>';
+    html+='<div class="balls" style="margin-bottom:8px">'+createBalls(p.numbers,null,'sm')+'</div>';
+    if(m.formula)html+='<div style="font-size:10px;color:var(--text2);margin-bottom:4px"><b>산술식:</b> '+m.formula+'</div>';
+    if(p.rationale)html+='<div style="font-size:10px;color:var(--text2);margin-bottom:6px"><b>사유:</b> '+p.rationale+'</div>';
+    html+='<div style="display:flex;gap:10px;font-size:10px;color:var(--text2);margin-bottom:6px">';
+    html+='<span>ROI '+(f(mt.roi)*100).toFixed(0)+'%</span>';
+    html+='<span>비인기 '+f(mt.unpopularity).toFixed(2)+'</span>';
+    html+='<span>건전성 '+f(mt.soundness).toFixed(2)+'</span>';
+    html+='</div>';
+    html+='<button onclick="addStrategyToPredict(\''+numsStr+'\',\'evolab:'+p.strategy+'\')" style="padding:4px 8px;border:none;border-radius:6px;background:var(--primary);color:#fff;font-size:10px;cursor:pointer">➕ 추가</button>';
+    html+='</div>';
+  });
+  document.getElementById('evolabPredictions').innerHTML=html;
+
+  const ls=evolabData.ledger_summary||{}, tt=ls.tier_total||{};
+  let lh='<div style="font-size:11px;font-weight:700;margin-bottom:6px">📒 누적 성적 (채점 '+(ls.graded_rounds||0)+'회차)</div>';
+  if(Object.keys(tt).length){
+    lh+='<div style="font-size:10px;color:var(--text2)">등수별 적중: '+Object.keys(tt).sort().map(t=>t+'등 '+tt[t]+'회').join(' · ')+'</div>';
+  }else{
+    lh+='<div style="font-size:10px;color:var(--text2)">아직 채점된 예측 없음 (다음 추첨 후 누적 시작)</div>';
+  }
+  // 회차별 최고 적중 개수 추이 (SVG 라인 그래프)
+  const rounds=ls.rounds||[];
+  if(rounds.length){
+    const W=300,H=70,n=rounds.length;
+    const pts=rounds.map((r,i)=>{
+      const x=(n===1?W/2:(i/(n-1))*W);
+      const y=H-(Math.min(r.best_match||0,6)/6)*H;
+      return x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+    lh+='<div style="margin-top:8px"><div style="font-size:10px;color:var(--text2);margin-bottom:2px">회차별 최고 적중 개수 (0~6, '+n+'회차)</div>';
+    lh+='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:70px;background:var(--card);border-radius:6px">';
+    lh+='<polyline points="'+pts+'" fill="none" stroke="var(--primary)" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+    lh+='</svg></div>';
+  }
+  document.getElementById('evolabLedger').innerHTML=lh;
+
+  if(evolabData.honesty_note)document.getElementById('evolabNote').textContent='⚠️ '+evolabData.honesty_note;
 }
 
 // 전략 설명 데이터
