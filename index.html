@@ -744,10 +744,14 @@ async function init(){
   }
 }
 
-// 백테스팅 결과 로드
+// 캐시버스팅: 날짜 단위로만 갱신(같은 날 재방문 시 브라우저 캐시 재사용 → 모바일 데이터 절약)
+function cacheBust(){return new Date().toISOString().slice(0,10)}
+
+// 백테스팅 결과 로드 (가벼운 파일만 — 회차별 상세는 "기록" 탭 진입 시 지연 로드)
+let backtestDetailLoaded=false;
 async function loadBacktestResults(){
   try{
-    const res=await fetch('backtest_results.json?t='+Date.now());
+    const res=await fetch('backtest_results.json?v='+cacheBust());
     if(!res.ok)return;
     backtestData=await res.json();
     renderStrategyPredictions();
@@ -758,11 +762,26 @@ async function loadBacktestResults(){
   }
 }
 
+// 회차별 상세 결과(수 MB) 지연 로드 — "기록" 탭에 처음 들어갈 때만
+async function loadBacktestDetail(){
+  if(backtestDetailLoaded||!backtestData)return;
+  try{
+    const res=await fetch('backtest_results_detail.json?v='+cacheBust());
+    if(!res.ok)return;
+    const detail=await res.json();
+    backtestData.results=detail.results;
+    backtestDetailLoaded=true;
+    renderWinHistory();
+  }catch(e){
+    console.log('회차별 상세 결과 없음');
+  }
+}
+
 // 🧬 evolab 진화 데이터 로드/렌더
 let evolabData=null;
 async function loadEvolabData(){
   try{
-    const res=await fetch('evolab/dashboard_data.json?t='+Date.now());
+    const res=await fetch('evolab/dashboard_data.json?v='+cacheBust());
     if(!res.ok)return;
     evolabData=await res.json();
     renderEvolab();
@@ -861,7 +880,7 @@ let strategyDescriptions={};
 // 전략 설명 로드
 async function loadStrategyDescriptions(){
   try{
-    const res=await fetch('strategy_descriptions.json?t='+Date.now());
+    const res=await fetch('strategy_descriptions.json?v='+cacheBust());
     if(!res.ok)return;
     strategyDescriptions=await res.json();
   }catch(e){
@@ -1035,7 +1054,7 @@ function renderBacktestHistory(){
 
   // 요약 정보
   const stats=backtestData.statistics;
-  const totalRounds=Object.keys(backtestData.results||{}).length;
+  const totalRounds=backtestData.next_round?backtestData.next_round-1:(Object.values(stats)[0]?.total||0);
   const totalStrategies=Object.keys(stats).length;
 
   let total2=0,total3=0,total4=0,total5=0;
@@ -1087,7 +1106,11 @@ function renderBacktestHistory(){
 
 // 당첨 기록 렌더링
 function renderWinHistory(){
-  if(!backtestData||!backtestData.results)return;
+  if(!backtestData)return;
+  if(!backtestData.results){
+    document.getElementById('btWinHistory').innerHTML='<div style="text-align:center;color:var(--text2);padding:20px">⏳ "기록" 탭 진입 시 상세 데이터를 불러옵니다</div>';
+    return;
+  }
 
   const wins=[];
   Object.entries(backtestData.results).forEach(([round,strategies])=>{
@@ -1278,6 +1301,7 @@ function showSection(id,el){
   el.classList.add('active');
   document.getElementById('sec-'+id).classList.add('active');
   window.scrollTo(0,0);
+  if(id==='backtest')loadBacktestDetail();
 }
 function showStatTab(id,el){
   document.querySelectorAll('#sec-stats .tab').forEach(t=>t.classList.remove('active'));

@@ -545,21 +545,32 @@ class BacktestEngine:
                     'avg_match': s['avg_match']
                 })
 
+        generated_at = datetime.now().isoformat()
         output = {
-            'generated_at': datetime.now().isoformat(),
+            'generated_at': generated_at,
             'next_round': next_round,
             'strategies': [{'name': s.name, 'description': s.description} for s in self.strategies],
             'statistics': self.get_statistics(),
             'predictions': top_predictions,
             'all_predictions': {name: pred['numbers'] for name, pred in predictions.items()},
-            'results': {str(k): v for k, v in self.results.items()},
             'evolution_log': self.evolution_log
         }
 
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(output, f, ensure_ascii=False, indent=2)
 
+        # 회차별 상세 결과(수 MB)는 별도 파일로 분리 — 홈 화면은 항상 가벼운
+        # output_path만 받고, "기록" 탭에 처음 들어갈 때만 이 파일을 지연 로드한다.
+        detail_path = output_path.replace('.json', '_detail.json')
+        detail = {
+            'generated_at': generated_at,
+            'results': {str(k): v for k, v in self.results.items()},
+        }
+        with open(detail_path, 'w', encoding='utf-8') as f:
+            json.dump(detail, f, ensure_ascii=False, indent=2)
+
         print(f"\n💾 결과 저장: {output_path}")
+        print(f"💾 상세 결과 저장: {detail_path}")
 
     def predict_next(self, round_num: int) -> Dict:
         """다음 회차 예측"""

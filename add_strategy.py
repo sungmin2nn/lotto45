@@ -14,6 +14,7 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOTTO_DATA_FILE = os.path.join(BASE_DIR, 'lotto_data.json')
 BACKTEST_RESULTS_FILE = os.path.join(BASE_DIR, 'backtest_results.json')
+BACKTEST_DETAIL_FILE = os.path.join(BASE_DIR, 'backtest_results_detail.json')
 STRATEGY_DESC_FILE = os.path.join(BASE_DIR, 'strategy_descriptions.json')
 USER_STRATEGIES_FILE = os.path.join(BASE_DIR, 'user_strategies.py')
 
@@ -159,12 +160,21 @@ USER_STRATEGIES['{name}'] = {func_name}
         f.write(content)
 
 def update_backtest_results(name, results):
-    """백테스트 결과 파일 업데이트"""
+    """백테스트 결과 파일 업데이트 (가벼운 통계는 backtest_results.json,
+    회차별 상세는 backtest_results_detail.json — 모바일에서 홈 화면마다
+    수 MB 상세 데이터까지 받지 않도록 분리되어 있다)"""
     if os.path.exists(BACKTEST_RESULTS_FILE):
         with open(BACKTEST_RESULTS_FILE, 'r') as f:
             data = json.load(f)
     else:
-        data = {'statistics': {}, 'results': {}, 'predictions': [], 'strategies': []}
+        data = {'statistics': {}, 'predictions': [], 'strategies': []}
+
+    if os.path.exists(BACKTEST_DETAIL_FILE):
+        with open(BACKTEST_DETAIL_FILE, 'r') as f:
+            detail = json.load(f)
+    else:
+        detail = {'results': {}}
+    detail.setdefault('results', {})
 
     # 통계 업데이트
     data['statistics'][name] = {
@@ -177,19 +187,19 @@ def update_backtest_results(name, results):
         '5등': results['wins'][5]
     }
 
-    # 회차별 결과 업데이트
-    for detail in results['details']:
-        round_str = str(detail['round'])
-        if round_str not in data['results']:
-            data['results'][round_str] = {}
+    # 회차별 결과 업데이트 (상세 파일)
+    for item in results['details']:
+        round_str = str(item['round'])
+        if round_str not in detail['results']:
+            detail['results'][round_str] = {}
 
-        rank_str = f"{detail['rank']}등"
-        data['results'][round_str][name] = {
-            'numbers': detail['predicted'],
-            'actual': detail['actual'],
-            'match': detail['matches'],
+        rank_str = f"{item['rank']}등"
+        detail['results'][round_str][name] = {
+            'numbers': item['predicted'],
+            'actual': item['actual'],
+            'match': item['matches'],
             'rank': rank_str,
-            'bonus': detail.get('bonus')
+            'bonus': item.get('bonus')
         }
 
     # strategies 배열 업데이트
@@ -204,8 +214,13 @@ def update_backtest_results(name, results):
             'wins': results['wins']
         })
 
+    data['generated_at'] = datetime.now().isoformat()
+    detail['generated_at'] = data['generated_at']
+
     with open(BACKTEST_RESULTS_FILE, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    with open(BACKTEST_DETAIL_FILE, 'w') as f:
+        json.dump(detail, f, ensure_ascii=False, indent=2)
 
 def update_strategy_descriptions(name, category, description, formula, example, results):
     """전략 설명 파일 업데이트"""
