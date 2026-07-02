@@ -1,22 +1,24 @@
 [
   {
-    "id": "최다출현_상위",
-    "name": "최다출현_상위",
-    "formula": "freq[n] = Σ_(최근 50회) count(n);  상위 12개 중 6개 무작위",
-    "rationale": "장기적으로 자주 나온 번호일수록 추첨 기계/공의 미세한 편향이 있다면 더 나올 여지가 있다고 가정. (※ 실증적 근거는 약하며 분산일 가능성 큼)",
-    "generation": 0,
+    "id": "생일회피_고번분산",
+    "name": "생일회피_고번분산",
+    "formula": "고번(32~45)에서 2개 + 저번(1~31)에서 4개 무작위;  합계 100~170 & 홀짝 2:4~4:2 & 연속수 없음 충족까지 재시도",
+    "rationale": "당첨 확률은 못 올린다(기대 적중 0.8개 불변). 다만 사람들이 거의 안 쓰는 32~45 고번을 강제 포함해 생일 쏠림(1~31)을 깨고, 합계·홀짝·연속 필터로 통계 건전성만 확보한다. 분배 회피 효과는 있으나 적중 자체엔 무관함을 명시.",
+    "generation": 1,
     "parents": [],
+    "code": "def generate(history, round_num):\n    # 비인기 조합 목적: 32~45 고번 2개 강제 포함으로 생일(1~31) 쏠림 회피.\n    # 적중 확률엔 영향 없음 — 오직 인기 조합 회피 + 통계 건전성.\n    for _ in range(300):\n        high = random.sample(range(32, 46), 2)\n        low = random.sample(range(1, 32), 4)\n        pick = sorted(high + low)\n        s = sum(pick)\n        odd = sum(1 for x in pick if x % 2)\n        consec = any(pick[i + 1] - pick[i] == 1 for i in range(5))\n        if 100 <= s <= 170 and 2 <= odd <= 4 and not consec:\n            return pick\n    return sorted(random.sample(range(1, 46), 6))",
     "metrics": {
       "n_predictions": 2000,
-      "roi": 0.7458,
+      "roi": 0.9254,
       "tier_hits": {
         "3": 1,
-        "5": 39
+        "4": 5,
+        "5": 36
       },
-      "avg_match": 0.726,
-      "unpopularity": 0.6063,
-      "soundness": 0.8881,
-      "fitness": 0.5951
+      "avg_match": 0.801,
+      "unpopularity": 0.7293,
+      "soundness": 0.9992,
+      "fitness": 0.7035
     },
     "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
   },
@@ -32,15 +34,15 @@
     "code": "def generate(history, round_num):\n    for _ in range(2000):\n        high = random.sample(range(32, 46), 3)\n        low = random.sample(range(1, 32), 3)\n        pick = sorted(high + low)\n        s = sum(pick)\n        if not (100 <= s <= 170):\n            continue\n        odd = sum(1 for x in pick if x % 2 == 1)\n        if not (2 <= odd <= 4):\n            continue\n        if any(pick[i + 1] - pick[i] == 1 for i in range(5)):\n            continue\n        buckets = [0, 0, 0]\n        for x in low:\n            if x <= 10:\n                buckets[0] += 1\n            elif x <= 21:\n                buckets[1] += 1\n            else:\n                buckets[2] += 1\n        if max(buckets) > 2:\n            continue\n        return pick\n    return sorted(random.sample(range(1, 46), 6))",
     "metrics": {
       "n_predictions": 2000,
-      "roi": 0.1825,
+      "roi": 0.1525,
       "tier_hits": {
-        "4": 3,
-        "5": 43
+        "4": 2,
+        "5": 41
       },
-      "avg_match": 0.783,
+      "avg_match": 0.7715,
       "unpopularity": 0.7685,
       "soundness": 0.9999,
-      "fitness": 0.5893
+      "fitness": 0.5841
     },
     "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
   },
@@ -54,61 +56,15 @@
     "code": "def generate(history, round_num):\n    # 6구간 균등 분산: 구간 겹침이 없어 항상 서로 다른 6개 보장.\n    # 구간쏠림·범위 협소 회피용. 적중 확률 향상 주장 아님.\n    bins = [(1, 7), (8, 15), (16, 23), (24, 31), (32, 38), (39, 45)]\n    for _ in range(300):\n        pick = sorted(random.randint(a, b) for a, b in bins)\n        s = sum(pick)\n        odd = sum(1 for x in pick if x % 2)\n        consec = any(pick[i + 1] - pick[i] == 1 for i in range(5))\n        if 100 <= s <= 170 and 2 <= odd <= 4 and not consec:\n            return pick\n    return sorted(random.sample(range(1, 46), 6))",
     "metrics": {
       "n_predictions": 2000,
-      "roi": 0.2125,
+      "roi": 0.18,
       "tier_hits": {
-        "4": 4,
-        "5": 45
+        "4": 2,
+        "5": 52
       },
-      "avg_match": 0.8185,
+      "avg_match": 0.8225,
       "unpopularity": 0.7543,
       "soundness": 1.0,
-      "fitness": 0.5889
-    },
-    "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
-  },
-  {
-    "id": "정상성_최적표본",
-    "name": "정상성_최적표본",
-    "formula": "K=200개 무작위 6조합 생성;  각 조합 점수 = -(|합-135|/135 + |홀수개-3|/3 + 구간분산_정규화);  6구간[(1-7)(8-15)(16-23)(24-31)(32-38)(39-45)] 커버수 가점;  최고점 1개 선택",
-    "rationale": "확률은 못 올린다(기대 0.8개 고정). 다만 합 135 근방·홀짝 3:3 근방·전 구간 분산이라는 '통계적 정상 프로필'에 가장 가까운 표본을 200개 후보 중 점수로 골라 쏠림 조합을 회피한다. 재시도(reject) 대신 연속 점수로 최적화하는 점이 기존 전략과 다르다.",
-    "generation": 2,
-    "parents": [
-      "island:통계건전성"
-    ],
-    "code": "def generate(history, round_num):\n    bins = [(1,7),(8,15),(16,23),(24,31),(32,38),(39,45)]\n    def score(c):\n        s = sum(c)\n        odd = sum(1 for x in c if x % 2)\n        sum_pen = abs(s - 135) / 135.0\n        odd_pen = abs(odd - 3) / 3.0\n        covered = 0\n        for lo, hi in bins:\n            if any(lo <= x <= hi for x in c):\n                covered += 1\n        cover_bonus = covered / 6.0\n        gaps = [c[i+1] - c[i] for i in range(5)]\n        mean_gap = sum(gaps) / 5.0\n        var = sum((g - mean_gap) ** 2 for g in gaps) / 5.0\n        spread_pen = var / 50.0\n        return -(sum_pen + odd_pen + spread_pen) + cover_bonus\n    best = None\n    best_sc = -1e9\n    for _ in range(200):\n        c = sorted(random.sample(range(1, 46), 6))\n        sc = score(c)\n        if sc > best_sc:\n            best_sc = sc\n            best = c\n    return best",
-    "metrics": {
-      "n_predictions": 2000,
-      "roi": 0.1625,
-      "tier_hits": {
-        "4": 3,
-        "5": 35
-      },
-      "avg_match": 0.807,
-      "unpopularity": 0.7386,
-      "soundness": 0.9997,
-      "fitness": 0.5738
-    },
-    "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
-  },
-  {
-    "id": "생일회피_고번분산",
-    "name": "생일회피_고번분산",
-    "formula": "고번(32~45)에서 2개 + 저번(1~31)에서 4개 무작위;  합계 100~170 & 홀짝 2:4~4:2 & 연속수 없음 충족까지 재시도",
-    "rationale": "당첨 확률은 못 올린다(기대 적중 0.8개 불변). 다만 사람들이 거의 안 쓰는 32~45 고번을 강제 포함해 생일 쏠림(1~31)을 깨고, 합계·홀짝·연속 필터로 통계 건전성만 확보한다. 분배 회피 효과는 있으나 적중 자체엔 무관함을 명시.",
-    "generation": 1,
-    "parents": [],
-    "code": "def generate(history, round_num):\n    # 비인기 조합 목적: 32~45 고번 2개 강제 포함으로 생일(1~31) 쏠림 회피.\n    # 적중 확률엔 영향 없음 — 오직 인기 조합 회피 + 통계 건전성.\n    for _ in range(300):\n        high = random.sample(range(32, 46), 2)\n        low = random.sample(range(1, 32), 4)\n        pick = sorted(high + low)\n        s = sum(pick)\n        odd = sum(1 for x in pick if x % 2)\n        consec = any(pick[i + 1] - pick[i] == 1 for i in range(5))\n        if 100 <= s <= 170 and 2 <= odd <= 4 and not consec:\n            return pick\n    return sorted(random.sample(range(1, 46), 6))",
-    "metrics": {
-      "n_predictions": 2000,
-      "roi": 0.1675,
-      "tier_hits": {
-        "4": 3,
-        "5": 37
-      },
-      "avg_match": 0.7895,
-      "unpopularity": 0.7293,
-      "soundness": 0.9992,
-      "fitness": 0.5708
+      "fitness": 0.5832
     },
     "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
   },
@@ -124,12 +80,36 @@
     "code": "def generate(history, round_num):\n    recent = past(history, round_num, 60)\n    freq = Counter()\n    for r in recent:\n        for n in r[\"numbers\"]:\n            freq[n] += 1\n    nums = list(range(1, 46))\n    weights = [1.0 / (freq[n] + 1) for n in nums]\n    for _ in range(400):\n        pick = set()\n        while len(pick) < 6:\n            pick.add(random.choices(nums, weights=weights, k=1)[0])\n        pick = sorted(pick)\n        s = sum(pick)\n        odd = sum(1 for n in pick if n % 2 == 1)\n        low = sum(1 for n in pick if n <= 31)\n        consec = any(pick[i+1] - pick[i] == 1 for i in range(5))\n        if 100 <= s <= 170 and 2 <= odd <= 4 and low <= 4 and not consec:\n            return pick\n    return sorted(random.sample(nums, 6))",
     "metrics": {
       "n_predictions": 2000,
-      "roi": 0.1125,
+      "roi": 0.1475,
       "tier_hits": {
-        "5": 45
+        "4": 1,
+        "5": 49
       },
-      "avg_match": 0.8005,
+      "avg_match": 0.806,
       "unpopularity": 0.7407,
+      "soundness": 0.9997,
+      "fitness": 0.572
+    },
+    "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
+  },
+  {
+    "id": "정상성_최적표본",
+    "name": "정상성_최적표본",
+    "formula": "K=200개 무작위 6조합 생성;  각 조합 점수 = -(|합-135|/135 + |홀수개-3|/3 + 구간분산_정규화);  6구간[(1-7)(8-15)(16-23)(24-31)(32-38)(39-45)] 커버수 가점;  최고점 1개 선택",
+    "rationale": "확률은 못 올린다(기대 0.8개 고정). 다만 합 135 근방·홀짝 3:3 근방·전 구간 분산이라는 '통계적 정상 프로필'에 가장 가까운 표본을 200개 후보 중 점수로 골라 쏠림 조합을 회피한다. 재시도(reject) 대신 연속 점수로 최적화하는 점이 기존 전략과 다르다.",
+    "generation": 2,
+    "parents": [
+      "island:통계건전성"
+    ],
+    "code": "def generate(history, round_num):\n    bins = [(1,7),(8,15),(16,23),(24,31),(32,38),(39,45)]\n    def score(c):\n        s = sum(c)\n        odd = sum(1 for x in c if x % 2)\n        sum_pen = abs(s - 135) / 135.0\n        odd_pen = abs(odd - 3) / 3.0\n        covered = 0\n        for lo, hi in bins:\n            if any(lo <= x <= hi for x in c):\n                covered += 1\n        cover_bonus = covered / 6.0\n        gaps = [c[i+1] - c[i] for i in range(5)]\n        mean_gap = sum(gaps) / 5.0\n        var = sum((g - mean_gap) ** 2 for g in gaps) / 5.0\n        spread_pen = var / 50.0\n        return -(sum_pen + odd_pen + spread_pen) + cover_bonus\n    best = None\n    best_sc = -1e9\n    for _ in range(200):\n        c = sorted(random.sample(range(1, 46), 6))\n        sc = score(c)\n        if sc > best_sc:\n            best_sc = sc\n            best = c\n    return best",
+    "metrics": {
+      "n_predictions": 2000,
+      "roi": 0.1175,
+      "tier_hits": {
+        "5": 47
+      },
+      "avg_match": 0.805,
+      "unpopularity": 0.7386,
       "soundness": 0.9997,
       "fitness": 0.5659
     },
@@ -144,15 +124,36 @@
     "parents": [],
     "metrics": {
       "n_predictions": 2000,
-      "roi": 0.2625,
+      "roi": 0.245,
+      "tier_hits": {
+        "4": 4,
+        "5": 58
+      },
+      "avg_match": 0.8655,
+      "unpopularity": 0.6633,
+      "soundness": 0.8692,
+      "fitness": 0.5255
+    },
+    "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
+  },
+  {
+    "id": "최다출현_상위",
+    "name": "최다출현_상위",
+    "formula": "freq[n] = Σ_(최근 50회) count(n);  상위 12개 중 6개 무작위",
+    "rationale": "장기적으로 자주 나온 번호일수록 추첨 기계/공의 미세한 편향이 있다면 더 나올 여지가 있다고 가정. (※ 실증적 근거는 약하며 분산일 가능성 큼)",
+    "generation": 0,
+    "parents": [],
+    "metrics": {
+      "n_predictions": 2000,
+      "roi": 0.2175,
       "tier_hits": {
         "4": 5,
-        "5": 55
+        "5": 37
       },
-      "avg_match": 0.854,
-      "unpopularity": 0.6645,
-      "soundness": 0.8711,
-      "fitness": 0.5295
+      "avg_match": 0.7505,
+      "unpopularity": 0.6045,
+      "soundness": 0.8909,
+      "fitness": 0.5026
     },
     "note": "관측 ROI는 분산(운)일 수 있음. 실재 엣지는 unpopularity 기반 분배회피뿐."
   },
@@ -167,7 +168,7 @@
       "n_predictions": 2000,
       "roi": 0.0,
       "tier_hits": {},
-      "avg_match": 0.76,
+      "avg_match": 0.78,
       "unpopularity": 0.0767,
       "soundness": 0.4942,
       "fitness": 0.1542

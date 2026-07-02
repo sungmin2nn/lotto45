@@ -254,6 +254,13 @@
       </div>
     </div>
 
+    <!-- 🎯 나또 공식 픽 (주간 2세트 + 추가 픽) -->
+    <div class="card" id="picksCard" style="display:none">
+      <div class="card-title">🎯 나또 공식 픽 <span class="help-icon tooltip">?<span class="tooltip-text">매주 자동 2세트(명예의 전당 적합도 상위)<br>선정 사유 표시, 추첨 후 결과·피드백 자동 채점<br>추가 세트는 요청 시에만 생성</span></span></div>
+      <div id="weeklyPicks"></div>
+      <div id="extraPicks" style="margin-top:10px"></div>
+    </div>
+
     <!-- 🧬 evolab 진화 추천 -->
     <div class="card" id="evolabCard" style="display:none">
       <div class="card-title">🧬 evolab 진화 추천 <span class="help-icon tooltip">?<span class="tooltip-text">자유탐색→성과측정→공유→진화 루프<br>전략마다 산술식+사유 표시<br>회차별 누적 적중 추적<br>적합도=ROI+비인기도+건전성</span></span></div>
@@ -759,7 +766,37 @@ async function loadEvolabData(){
     if(!res.ok)return;
     evolabData=await res.json();
     renderEvolab();
+    renderPicks();
   }catch(e){ console.log('evolab 데이터 없음'); }
+}
+
+// 🎯 나또 공식 픽(주간 2세트 + 추가 픽) 렌더
+function renderPickEntry(p){
+  let h='<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:8px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  h+='<span style="font-size:12px;font-weight:700;color:var(--primary)">'+p.round+'회 · '+(p.type==='weekly'?'주간 공식 픽':'추가 픽')+'</span>';
+  h+='<span style="font-size:10px;color:var(--text2)">'+p.generated_at+'</span>';
+  h+='</div>';
+  if(p.basis)h+='<div style="font-size:10px;color:var(--text2);margin-bottom:8px"><b>선정 사유:</b> '+p.basis+'</div>';
+  p.sets.forEach(s=>{
+    const r=p.result&&p.result.sets.find(rs=>rs.id===s.id);
+    h+='<div style="margin-bottom:6px">';
+    h+='<div style="font-size:10px;color:var(--text2);margin-bottom:2px">세트'+s.id+' ['+s.strategy+']'+(r?'  → '+r.rank+' ('+r.count+'개 일치)':'')+'</div>';
+    h+='<div class="balls">'+createBalls(s.numbers,null,'sm',r?r.matched:[])+'</div>';
+    h+='</div>';
+  });
+  if(p.feedback)h+='<div style="font-size:10px;color:var(--success);margin-top:6px;padding:8px;background:var(--card);border-radius:8px"><b>결과 피드백:</b> '+p.feedback+'</div>';
+  else h+='<div style="font-size:10px;color:var(--text2);margin-top:6px">⏳ 추첨 결과 대기 중</div>';
+  h+='</div>';
+  return h;
+}
+
+function renderPicks(){
+  const wp=(evolabData&&evolabData.weekly_picks)||[], ep=(evolabData&&evolabData.extra_picks)||[];
+  if(!wp.length&&!ep.length)return;
+  document.getElementById('picksCard').style.display='block';
+  document.getElementById('weeklyPicks').innerHTML=wp.slice().reverse().map(renderPickEntry).join('');
+  document.getElementById('extraPicks').innerHTML=ep.slice().reverse().map(renderPickEntry).join('');
 }
 
 function renderEvolab(){

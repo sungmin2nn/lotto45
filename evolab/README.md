@@ -14,20 +14,35 @@ Hall of Fame + 섬(Island) 모델로 설계됨.
 | `hall_of_fame.json` | 🏆 공유 풀 — 성과 좋은 전략이 승격되어 저장됨 (자동 생성) |
 | `evolved_strategies.json` | 🧬 LLM이 만든 진화 전략 누적 저장 (코드 포함, 자동 생성) |
 | `ledger.jsonl` | 📒 회차×전략별 (사유·번호·결과) 누적 원장 (자동 생성) |
-| `dashboard_data.json` | index.html "🧬 evolab 진화 추천" 카드가 fetch (자동 생성) |
+| `picks.json` | 🎯 "나또 공식 픽" — 회차당 주간 2세트(자동) + 온디맨드 추가 픽. 선정사유·결과·피드백 포함 (자동 생성) |
+| `dashboard_data.json` | index.html "🎯 나또 공식 픽" / "🧬 evolab 진화 추천" 카드가 fetch (자동 생성) |
 
 ## 실행
 
 ```bash
 cd evolab
-python engine.py            # 결정적 사이클: 채점 → 평가 → 선발 → 예측 (시드+저장된 진화전략)
+python engine.py            # 결정적 사이클: 채점 → 평가 → 선발 → 예측 → 주간 공식 픽 2세트 자동 기록
 python engine.py --llm      # + 단일 LLM(claude -p) 탐색가가 새 전략 2개 생성·검증·누적
 python engine.py --llm -n 4 # 새 전략 4개 제안
 python engine.py --islands  # 🌊 섬 모델: 4개 탐색가가 서로 다른 관점으로 동시 탐색
+python engine.py --extra 3  # 주간 자동 픽과 별개로, 다음 회차 추가 픽 3세트를 온디맨드 생성
 ```
 
-주간 자동 실행(Windows): `evolab/run_weekly.ps1` — 수집 → 진화(섬) → 로그.
+주간 자동 실행(Windows): `evolab/run_weekly.ps1` — 수집 → 진화(섬, 공식 픽 2세트 포함) → 로그.
 작업 스케줄러 등록법은 스크립트 상단 주석 참고. (CI는 `claude -p` 불가 → LLM 진화는 로컬에서)
+
+## 🎯 나또 공식 픽 (주간 2세트 + 추가 픽)
+
+매 사이클(주간 자동 실행 포함)마다 명예의 전당 적합도 상위 2개 전략으로 **공식 픽 2세트**를
+`picks.json`에 자동 기록한다(회차당 1번, 재실행해도 중복 안 됨). 각 세트는 선정 사유(`basis`,
+어떤 전략·산식을 썼는지)를 포함하고, 다음 사이클에서 그 회차 실제 결과가 나오면 자동으로
+채점되어 `result`(일치 번호·등수)와 `feedback`(정직한 해석 — 당첨/미당첨 모두 0.8개 기대값
+기준 설명)이 채워진다.
+
+추가 세트는 **자동으로 늘지 않는다** — 대시보드 또는 채팅 요청이 있을 때만
+`python engine.py --extra N` 으로 그 시점의 명예의 전당 순위를 기반으로 생성되며, 이번 회차에
+이미 공식 픽에 쓰인 전략은 제외된다. 대시보드의 "🎯 나또 공식 픽" 카드가 `weekly_picks`/
+`extra_picks`를 각각 보여준다.
 
 ## LLM 탐색가 (explorer.py)
 

@@ -14,6 +14,7 @@ import os
 import sys
 import random
 from collections import Counter
+from datetime import date
 from typing import List, Dict, Optional
 
 # Windows 콘솔(cp949)에서도 이모지/한글 출력이 깨지지 않도록 UTF-8 고정
@@ -33,6 +34,9 @@ HOF_FILE = os.path.join(BASE_DIR, "hall_of_fame.json")
 LEDGER_FILE = os.path.join(BASE_DIR, "ledger.jsonl")
 DASHBOARD_FILE = os.path.join(BASE_DIR, "dashboard_data.json")
 EVOLVED_FILE = os.path.join(BASE_DIR, "evolved_strategies.json")
+PICKS_FILE = os.path.join(BASE_DIR, "picks.json")
+
+TIER_NAMES = {1: "1등", 2: "2등", 3: "3등", 4: "4등", 5: "5등"}
 
 
 # ======================================================================
@@ -148,6 +152,129 @@ def grade_pending(data: List[Dict], path: str = LEDGER_FILE):
 
 
 # ======================================================================
+# 3.5 공식 픽 (주간 2세트 + 온디맨드 추가 세트)
+# ======================================================================
+def load_picks(path: str = PICKS_FILE) -> List[Dict]:
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_picks(picks: List[Dict], path: str = PICKS_FILE):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(picks, f, ensure_ascii=False, indent=2)
+
+
+def _feedback_text(results: List[Dict]) -> str:
+    hits = [r for r in results if r["tier"]]
+    if hits:
+        parts = ", ".join(f"세트{r['id']} {TIER_NAMES[r['tier']]}({r['count']}개 일치)" for r in hits)
+        return (f"당첨 발생 — {parts}. (동반 당첨자 수는 별도 발표 전까지 확인 불가. "
+                f"분배회피 전략이었다면 그 수가 적을수록 본래 목적에 부합)")
+    best = max(r["count"] for r in results) if results else 0
+    return (f"전 세트 미당첨(최고 {best}개 일치). 어떤 조합이든 기대 적중은 0.8개라 "
+            f"이 결과는 전략 우열과 무관한 정상 분산 범위입니다.")
+
+
+def build_pick_sets(scored: List[tuple], data: List[Dict], next_round: int,
+                     n: int, exclude_strategy_ids: Optional[set] = None) -> List[Dict]:
+    """적합도순 scored[(strategy, metrics), ...]에서 아직 안 쓴 전략 상위 n개로 세트 구성."""
+    exclude_strategy_ids = exclude_strategy_ids or set()
+    chosen = [(st, met) for st, met in scored if st.id not in exclude_strategy_ids][:n]
+    sets = []
+    for i, (st, met) in enumerate(chosen, 1):
+        nums = st.generate(data, next_round)
+        sets.append({
+            "id": i, "strategy_id": st.id, "strategy": st.name,
+            "numbers": sorted(nums), "rationale": st.rationale,
+            "formula": st.formula, "fitness": round(met.fitness, 4),
+        })
+    return sets
+
+
+def grade_picks(picks: List[Dict], data: List[Dict]) -> int:
+    """결과가 나온 회차의 픽을 채점하고 사유+피드백을 채운다."""
+    rmap = {d["round"]: d for d in data}
+    graded = 0
+    for p in picks:
+        if p.get("result") is not None:
+            continue
+        item = rmap.get(p["round"])
+        if not item:
+            continue
+        winning, bonus = item["numbers"], item["bonus"]
+        wset = set(winning)
+        results = []
+        for s in p["sets"]:
+            matched = sorted(set(s["numbers"]) & wset)
+            _, tier = grade(s["numbers"], winning, bonus)
+            results.append({
+                "id": s["id"], "matched": matched, "count": len(matched),
+                "tier": tier, "rank": TIER_NAMES.get(tier, "낙첨"),
+            })
+        p["result"] = {"winning": winning, "bonus": bonus, "sets": results}
+        p["feedback"] = _feedback_text(results)
+        graded += 1
+    return graded
+
+
+def record_weekly_picks(picks: List[Dict], scored: List[tuple], data: List[Dict],
+                         next_round: int, n: int = 2) -> Optional[Dict]:
+    """회차당 1번, 명예의 전당 적합도 상위 n개 전략으로 '주간 공식 픽'을 기록 (중복 실행 안전)."""
+    if any(p["round"] == next_round and p["type"] == "weekly" for p in picks):
+        return None
+    sets = build_pick_sets(scored, data, next_round, n)
+    entry = {
+        "round": next_round, "type": "weekly",
+        "generated_at": date.today().isoformat(),
+        "basis": (f"명예의 전당 적합도 상위 {n}개 전략 — 최근 출현빈도·주기성·구간분산 등 "
+                  f"내부 과거 당첨 데이터 기반 산식 + 분배회피(비인기도)·통계건전성 결합. "
+                  f"※ 타인의 실제 구매 패턴(외부 데이터)은 두뇌에 없음(gap) — 휴리스틱으로만 근사."),
+        "sets": sets, "result": None, "feedback": None,
+    }
+    picks.append(entry)
+    return entry
+
+
+def generate_extra_picks(n: int = 3) -> Dict:
+    """온디맨드 추가 픽 — 주간 자동 사이클과 별개로, 요청 시점에 즉시 생성."""
+    data = load_data(DATA_FILE)
+    next_round = data[-1]["round"] + 1
+    evolved = load_evolved(data)
+    population = seed_strategies() + evolved
+    scored = sorted(((st, backtest(st, data)) for st in population),
+                     key=lambda x: x[1].fitness, reverse=True)
+
+    picks = load_picks()
+    grade_picks(picks, data)
+    used_ids = {s["strategy_id"] for p in picks if p["round"] == next_round for s in p["sets"]}
+    sets = build_pick_sets(scored, data, next_round, n, used_ids)
+    entry = {
+        "round": next_round, "type": "extra",
+        "generated_at": date.today().isoformat(),
+        "basis": f"요청에 의한 추가 픽 {n}세트 — 명예의 전당 적합도 순위 기반(이번 회차 기사용 전략 제외).",
+        "sets": sets, "result": None, "feedback": None,
+    }
+    picks.append(entry)
+    save_picks(picks)
+    update_dashboard_picks(picks)
+    return entry
+
+
+def update_dashboard_picks(picks: List[Dict], path: str = DASHBOARD_FILE):
+    """picks.json 변경분만 dashboard_data.json에 반영 (predictions 등 다른 필드는 보존)."""
+    out = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            out = json.load(f)
+    out["weekly_picks"] = [p for p in picks if p["type"] == "weekly"][-8:]
+    out["extra_picks"] = [p for p in picks if p["type"] == "extra"][-8:]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
+
+
+# ======================================================================
 # 4. LLM 탐색가 + 진화 전략 영속화
 # ======================================================================
 def load_evolved(data: List[Dict]) -> List[Strategy]:
@@ -260,6 +387,8 @@ def run_cycle(verbose: bool = True, use_llm: bool = False,
 
     # (a) 지난 예측 채점
     n_graded = grade_pending(data)
+    picks = load_picks()
+    n_picks_graded = grade_picks(picks, data)
 
     # (b) 전략 모집단 = 시드 + 저장된 진화전략 + (옵션) LLM 신규 제안
     hall = HallOfFame()
@@ -298,12 +427,17 @@ def run_cycle(verbose: bool = True, use_llm: bool = False,
     new_rows = [p for p in predictions if (p["round"], p["strategy_id"]) not in existing]
     append_ledger(new_rows)
 
+    # (d.5) 주간 공식 픽 2세트 자동 기록 (회차당 1번, 중복 실행 안전)
+    weekly_entry = record_weekly_picks(picks, scored, data, next_round, n=2)
+    save_picks(picks)
+
     # (e) 대시보드용 JSON 내보내기
     export_dashboard(hall, predictions, next_round)
+    update_dashboard_picks(picks)
 
     if verbose:
         print(f"📊 사이클 완료 — 데이터 최신 {latest}회, 다음 예측 {next_round}회")
-        print(f"   채점된 지난 예측: {n_graded}건")
+        print(f"   채점된 지난 예측: {n_graded}건 / 채점된 픽: {n_picks_graded}건")
         print(f"\n🏆 명예의 전당 TOP 5 (적합도순):")
         for e in hall.top(5):
             mt = e["metrics"]
@@ -313,9 +447,14 @@ def run_cycle(verbose: bool = True, use_llm: bool = False,
         print(f"\n🔮 {next_round}회 추천 (상위 전략별):")
         for p in predictions:
             print(f"   [{p['strategy_id']}] {p['numbers']}  ← {p['rationale'][:40]}…")
+        if weekly_entry:
+            print(f"\n🎯 주간 공식 픽 {next_round}회 (2세트):")
+            for s in weekly_entry["sets"]:
+                print(f"   세트{s['id']} [{s['strategy']}] {s['numbers']}")
         print(f"\n⚠️  ROI는 분산(운)일 수 있음. 실재 엣지는 분배회피(unpopularity)뿐.")
 
     return {"next_round": next_round, "graded": n_graded,
+            "picks_graded": n_picks_graded, "weekly_entry": weekly_entry,
             "hall_top": hall.top(5), "predictions": predictions}
 
 
@@ -325,6 +464,14 @@ if __name__ == "__main__":
     ap.add_argument("--llm", action="store_true", help="단일 LLM(claude -p) 탐색가로 새 전략 생성")
     ap.add_argument("--islands", action="store_true", help="섬 모델: 여러 탐색가 동시 탐색")
     ap.add_argument("-n", type=int, default=2, help="제안 전략 수 (섬 모드면 섬당 개수)")
+    ap.add_argument("--extra", type=int, default=0, metavar="N",
+                     help="주간 자동 사이클과 별개로, 다음 회차 추가 픽 N세트를 온디맨드 생성")
     args = ap.parse_args()
-    run_cycle(use_llm=args.llm, islands=args.islands,
-              n_propose=(1 if args.islands and args.n == 2 else args.n))
+    if args.extra:
+        entry = generate_extra_picks(args.extra)
+        print(f"➕ 추가 픽 {args.extra}세트 생성 — {entry['round']}회 ({entry['generated_at']})")
+        for s in entry["sets"]:
+            print(f"   세트{s['id']} [{s['strategy']}] {s['numbers']}")
+    else:
+        run_cycle(use_llm=args.llm, islands=args.islands,
+                  n_propose=(1 if args.islands and args.n == 2 else args.n))
